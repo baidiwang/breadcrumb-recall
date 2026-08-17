@@ -22,6 +22,7 @@ const createFeatureExtractionPipeline = pipeline as unknown as (
 function getExtractor(): Promise<FeatureExtractionPipeline> {
   if (!extractorPromise) {
     env.cacheDir = process.env.EMBEDDING_CACHE_DIR ?? ".cache/transformers";
+    if (process.env.EMBEDDING_LOCAL_ONLY === "true") env.allowRemoteModels = false;
     extractorPromise = createFeatureExtractionPipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
       dtype: LOCAL_EMBEDDING_DTYPE
     });

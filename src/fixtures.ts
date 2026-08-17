@@ -3,6 +3,17 @@ import type { SmokeMemory } from "./types.js";
 export const partialRecallContext =
   "Night portrait study. Keep the environment cool without losing warm skin tones.";
 
+export const nightPortraitCaptureContext = `
+Project: Night Portrait.
+The artwork shows a warmly lit character against a nighttime environment.
+The creative intent is to keep the character warm and inviting while the environment remains cool.
+Recent activity: a warm yellow background was explored but competed with the subject. A deep blue
+background was also explored but made the skin tones feel muddy. A muted blue-violet direction is
+currently the most promising. Work stopped while deciding how to keep the background cool without
+making the skin feel muddy. The next planned experiment was to reduce background saturation while
+preserving warm highlights around the subject.
+`.trim();
+
 export const smokeMemories: SmokeMemory[] = [
   {
     id: "00000000-0000-4000-8000-000000000001",

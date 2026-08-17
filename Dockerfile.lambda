@@ -1,0 +1,26 @@
+FROM public.ecr.aws/lambda/nodejs:22 AS build
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+COPY sql ./sql
+RUN npm run build
+
+ENV EMBEDDING_CACHE_DIR=/opt/model-cache
+RUN node dist/scripts/cache-model.js
+RUN npm prune --omit=dev
+
+FROM public.ecr.aws/lambda/nodejs:22
+WORKDIR ${LAMBDA_TASK_ROOT}
+COPY --from=build ${LAMBDA_TASK_ROOT}/package.json ./package.json
+COPY --from=build ${LAMBDA_TASK_ROOT}/node_modules ./node_modules
+COPY --from=build ${LAMBDA_TASK_ROOT}/dist ./dist
+COPY --from=build ${LAMBDA_TASK_ROOT}/sql ./sql
+COPY --from=build /opt/model-cache /opt/model-cache
+
+ENV NODE_ENV=production
+ENV EMBEDDING_CACHE_DIR=/opt/model-cache
+ENV EMBEDDING_LOCAL_ONLY=true
+CMD ["dist/api/lambda.handler"]

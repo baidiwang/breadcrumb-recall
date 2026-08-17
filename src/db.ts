@@ -10,6 +10,7 @@ export type RetrievedMemory = {
   id: string;
   projectId: string;
   intent: string;
+  exploredDirections: string[];
   rejectedDirections: string[];
   currentDirection: string;
   unresolvedQuestion: string;
@@ -22,7 +23,7 @@ export function createPool(): pg.Pool {
   if (!connectionString) {
     throw new Error("DATABASE_URL is required. Export it before running npm run smoke.");
   }
-  return new Pool({ connectionString, max: 3, application_name: "breadcrumb-recall-smoke" });
+  return new Pool({ connectionString, max: 3, application_name: "breadcrumb-recall" });
 }
 
 export async function applySchema(pool: pg.Pool): Promise<void> {
@@ -115,43 +116,67 @@ export async function upsertMemory(
 export async function searchMemories(
   pool: pg.Pool,
   queryEmbedding: number[],
-  limit = 3
+  limit = 3,
+  projectId?: string
 ): Promise<RetrievedMemory[]> {
   const result = await pool.query<{
     id: string;
     project_id: string;
     intent: string;
+    explored_directions: string[];
     rejected_directions: string[];
     current_direction: string;
     unresolved_question: string;
     next_experiment: string;
     distance: string;
-  }>(
+  }>(projectId ?
     `SELECT
        id::STRING,
        project_id,
        intent,
+       explored_directions,
        rejected_directions,
        current_direction,
        unresolved_question,
        next_experiment,
        embedding <-> $1::VECTOR AS distance
      FROM work_states
-     ORDER BY embedding <-> $1::VECTOR
+     WHERE project_id = $2
+     ORDER BY embedding <-> $1::VECTOR, created_at DESC
+     LIMIT $3` :
+    `SELECT
+       id::STRING,
+       project_id,
+       intent,
+       explored_directions,
+       rejected_directions,
+       current_direction,
+       unresolved_question,
+       next_experiment,
+       embedding <-> $1::VECTOR AS distance
+     FROM work_states
+     ORDER BY embedding <-> $1::VECTOR, created_at DESC
      LIMIT $2`,
-    [vectorLiteral(queryEmbedding), limit]
+    projectId
+      ? [vectorLiteral(queryEmbedding), projectId, limit]
+      : [vectorLiteral(queryEmbedding), limit]
   );
 
   return result.rows.map((row) => ({
     id: row.id,
     projectId: row.project_id,
     intent: row.intent,
+    exploredDirections: row.explored_directions,
     rejectedDirections: row.rejected_directions,
     currentDirection: row.current_direction,
     unresolvedQuestion: row.unresolved_question,
     nextExperiment: row.next_experiment,
     distance: Number(row.distance)
   }));
+}
+
+export async function checkCockroach(pool: pg.Pool): Promise<void> {
+  await pool.query("SELECT 1");
 }
 
 export async function getDatabaseEvidence(pool: pg.Pool): Promise<{

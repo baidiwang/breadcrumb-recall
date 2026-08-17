@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Agentic work-state memory proof for Breadcrumb Recall.",
   "scripts": {
+    "api:dev": "tsx src/api/server.ts",
+    "api:smoke": "tsx src/scripts/api-smoke.ts",
+    "build": "tsc -p tsconfig.build.json",
     "smoke": "tsx src/smoke.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -1,0 +1,13 @@
+.git
+.github
+.cache
+.env
+.env.*
+!.env.example
+node_modules
+dist
+*.pem
+*.key
+credentials.json
+.aws
+*.log
