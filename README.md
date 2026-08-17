@@ -22,8 +22,7 @@ current direction, unresolved question, and next experiment.
 
 ```bash
 npm install
-export DATABASE_URL='your CockroachDB Cloud connection string'
-export AWS_REGION='us-east-1'
+# Create an ignored .env.local from .env.example and set DATABASE_URL.
 # Authenticate AWS through a profile, SSO session, or environment variables.
 npm run smoke
 ```

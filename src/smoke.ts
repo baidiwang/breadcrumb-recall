@@ -1,7 +1,13 @@
+import { existsSync } from "node:fs";
+import { loadEnvFile } from "node:process";
 import { createPool, applySchema, getDatabaseEvidence, searchMemories, upsertMemory } from "./db.js";
 import { createBedrockEmbedder } from "./embedding.js";
 import { partialRecallContext, smokeMemories } from "./fixtures.js";
 import { workStateToEmbeddingText } from "./memory-text.js";
+
+if (existsSync(".env.local")) {
+  loadEnvFile(".env.local");
+}
 
 async function main(): Promise<void> {
   const embedder = createBedrockEmbedder();
