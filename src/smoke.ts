@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { createPool, applySchema, getDatabaseEvidence, searchMemories, upsertMemory } from "./db.js";
-import { createBedrockEmbedder } from "./embedding.js";
+import { createLocalEmbedder } from "./embedding.js";
 import { partialRecallContext, smokeMemories } from "./fixtures.js";
 import { workStateToEmbeddingText } from "./memory-text.js";
 
@@ -10,7 +10,7 @@ if (existsSync(".env.local")) {
 }
 
 async function main(): Promise<void> {
-  const embedder = createBedrockEmbedder();
+  const embedder = createLocalEmbedder();
   const pool = createPool();
 
   try {
@@ -44,7 +44,11 @@ async function main(): Promise<void> {
       JSON.stringify(
         {
           passed: true,
-          embedding: { provider: "Amazon Bedrock", model: embedder.modelId, dimensions: embedder.dimensions },
+          embedding: {
+            provider: "local ONNX via Transformers.js",
+            model: embedder.modelId,
+            dimensions: embedder.dimensions
+          },
           cockroachdb: evidence,
           currentContext: partialRecallContext,
           retrievedMemories,

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { EMBEDDING_DIMENSIONS } from "./embedding-config.js";
 import type { SmokeMemory } from "./types.js";
 
 const { Pool } = pg;
@@ -34,6 +35,39 @@ export async function applySchema(pool: pg.Pool): Promise<void> {
   for (const statement of statements) {
     await pool.query(statement);
   }
+  await ensureEmbeddingDimensions(pool, EMBEDDING_DIMENSIONS);
+}
+
+async function ensureEmbeddingDimensions(pool: pg.Pool, expected: number): Promise<void> {
+  const createResult = await pool.query<{ create_statement: string }>(
+    "SHOW CREATE TABLE work_states"
+  );
+  const createStatement = createResult.rows[0]?.create_statement ?? "";
+  const match = createStatement.match(/embedding\s+VECTOR\((\d+)\)/i);
+  const current = match ? Number(match[1]) : undefined;
+  if (current === expected) return;
+  if (!current) {
+    throw new Error("Could not determine the CockroachDB embedding column dimensions.");
+  }
+
+  const countResult = await pool.query<{ count: string }>(
+    "SELECT count(*)::STRING AS count FROM work_states"
+  );
+  const rowCount = Number(countResult.rows[0]?.count ?? "0");
+  if (rowCount > 0) {
+    throw new Error(
+      `Refusing to migrate VECTOR(${current}) to VECTOR(${expected}) with ${rowCount} stored rows.`
+    );
+  }
+
+  await pool.query("DROP INDEX IF EXISTS work_states@work_states_embedding_idx");
+  await pool.query("ALTER TABLE work_states DROP COLUMN embedding");
+  await pool.query(
+    `ALTER TABLE work_states ADD COLUMN embedding VECTOR(${expected}) NOT NULL`
+  );
+  await pool.query(
+    "CREATE VECTOR INDEX work_states_embedding_idx ON work_states (embedding)"
+  );
 }
 
 function vectorLiteral(embedding: number[]): string {

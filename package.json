@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@huggingface/transformers": "3.8.1",
     "pg": "^8.0.0"
   },
   "devDependencies": {

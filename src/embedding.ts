@@ -1,9 +1,9 @@
+import { env, pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
 import {
-  BedrockRuntimeClient,
-  InvokeModelCommand
-} from "@aws-sdk/client-bedrock-runtime";
-
-const dimensions = 1024;
+  EMBEDDING_DIMENSIONS,
+  LOCAL_EMBEDDING_DTYPE,
+  LOCAL_EMBEDDING_MODEL
+} from "./embedding-config.js";
 
 export type Embedder = {
   modelId: string;
@@ -11,40 +11,42 @@ export type Embedder = {
   embed: (text: string) => Promise<number[]>;
 };
 
-export function createBedrockEmbedder(): Embedder {
-  const region = process.env.AWS_REGION ?? "us-east-1";
-  const modelId = process.env.BEDROCK_EMBED_MODEL ?? "amazon.titan-embed-text-v2:0";
-  const client = new BedrockRuntimeClient({ region });
+let extractorPromise: Promise<FeatureExtractionPipeline> | undefined;
+
+const createFeatureExtractionPipeline = pipeline as unknown as (
+  task: "feature-extraction",
+  model: string,
+  options: { dtype: string }
+) => Promise<FeatureExtractionPipeline>;
+
+function getExtractor(): Promise<FeatureExtractionPipeline> {
+  if (!extractorPromise) {
+    env.cacheDir = process.env.EMBEDDING_CACHE_DIR ?? ".cache/transformers";
+    extractorPromise = createFeatureExtractionPipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
+      dtype: LOCAL_EMBEDDING_DTYPE
+    });
+  }
+  return extractorPromise;
+}
+
+export function createLocalEmbedder(): Embedder {
 
   return {
-    modelId,
-    dimensions,
+    modelId: LOCAL_EMBEDDING_MODEL,
+    dimensions: EMBEDDING_DIMENSIONS,
     async embed(text: string): Promise<number[]> {
-      const response = await client.send(
-        new InvokeModelCommand({
-          modelId,
-          contentType: "application/json",
-          accept: "application/json",
-          body: JSON.stringify({
-            inputText: text,
-            dimensions,
-            normalize: true,
-            embeddingTypes: ["float"]
-          })
-        })
-      );
-
-      const payload = JSON.parse(new TextDecoder().decode(response.body)) as {
-        embedding?: unknown;
-      };
+      const extractor = await getExtractor();
+      const output = await extractor(text, { pooling: "mean", normalize: true });
+      const embedding = Array.from(output.data, (value) => Number(value));
       if (
-        !Array.isArray(payload.embedding) ||
-        payload.embedding.length !== dimensions ||
-        payload.embedding.some((value) => typeof value !== "number")
+        embedding.length !== EMBEDDING_DIMENSIONS ||
+        embedding.some((value) => typeof value !== "number" || !Number.isFinite(value))
       ) {
-        throw new Error(`Bedrock returned an invalid ${dimensions}-dimension embedding.`);
+        throw new Error(
+          `Local model returned an invalid ${EMBEDDING_DIMENSIONS}-dimension embedding.`
+        );
       }
-      return payload.embedding as number[];
+      return embedding;
     }
   };
 }

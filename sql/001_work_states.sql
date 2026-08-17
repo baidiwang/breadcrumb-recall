@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS work_states (
   unresolved_question STRING NOT NULL,
   next_experiment STRING NOT NULL,
   source_context JSONB NOT NULL,
-  embedding VECTOR(1024) NOT NULL
+  embedding VECTOR(384) NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS work_states_project_created_idx

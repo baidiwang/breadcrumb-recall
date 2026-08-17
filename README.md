@@ -8,8 +8,8 @@ This test proves the non-mocked path:
 
 ```text
 structured work state
-→ Amazon Bedrock Titan embedding
-→ CockroachDB VECTOR(1024)
+→ local quantized all-MiniLM-L6-v2 embedding
+→ CockroachDB VECTOR(384)
 → CockroachDB distributed vector index
 → semantic retrieval from intentionally incomplete context
 ```
@@ -23,7 +23,6 @@ current direction, unresolved question, and next experiment.
 ```bash
 npm install
 # Create an ignored .env.local from .env.example and set DATABASE_URL.
-# Authenticate AWS through a profile, SSO session, or environment variables.
 npm run smoke
 ```
 
@@ -35,5 +34,9 @@ PASS: partial context retrieved the Night Portrait work frontier.
 
 The final JSON includes the CockroachDB version, vector index name, stored vector
 dimensions, ranked memories, distances, and fields recovered only from memory.
+
+The embedding model runs locally through Transformers.js and ONNX. The first run
+downloads the quantized model into `.cache/transformers`; later runs use the local
+cache and require no embedding API account.
 
 Never commit database passwords or AWS credentials. See `.env.example` for names only.
