@@ -114,6 +114,67 @@ const recall = await fetch(`${API_URL}/api/recall`, {
 Use `capture.workState`, `recall.reconstructedWorkState`, and
 `recall.retrievedMemories`; no visual changes are required.
 
+## CockroachDB Cloud Managed MCP inspection
+
+The production Recall path continues to use the application database connection and
+CockroachDB vector search directly. Managed MCP is a separate, read-only inspection
+path for an operator or agent to examine the same persistent Work-State memory. It is
+not in the user-request path.
+
+This repository includes a project-scoped [`.mcp.json`](.mcp.json) configured for the
+same CockroachDB Cloud cluster. The cluster ID is an identifier, not a credential;
+authentication is completed with CockroachDB Cloud OAuth and no OAuth token is stored
+in the repository.
+
+To reproduce with Claude Code:
+
+```bash
+claude mcp add cockroachdb-cloud https://cockroachlabs.cloud/mcp \
+  --scope project \
+  --transport http \
+  --header "mcp-cluster-id: 154e9b66-e34c-4fb6-937c-6c0764931d2c"
+claude
+```
+
+Inside Claude Code, open `/mcp`, authenticate with CockroachDB Cloud, and grant
+**Read Data** only. Then use this inspection prompt:
+
+```text
+Using only the cockroachdb-cloud MCP server and read-only select_query, run exactly
+this SQL against defaultdb:
+
+SELECT id::STRING AS memory_id, created_at, intent, current_direction,
+       unresolved_question, next_experiment
+FROM public.work_states
+WHERE project_id = 'night-portrait'
+ORDER BY created_at DESC
+LIMIT 1;
+
+Return every field exactly as the MCP tool returned it. Do not modify data.
+```
+
+Verified on 2026-08-17 through Managed MCP `select_query` (one read, no writes):
+
+```json
+{
+  "rows": [
+    {
+      "memory_id": "9fb83770-3589-4e9c-97fd-d43d4dbe3574",
+      "created_at": "2026-08-17T23:50:31.066165Z",
+      "intent": "Create a night portrait where the character feels warm and inviting while maintaining a cool nighttime environment without muddying skin tones",
+      "current_direction": "Muted blue-violet background with reduced saturation while preserving warm highlights",
+      "unresolved_question": "How to maintain cool nighttime environment without the background colors desaturating or cooling the skin tones to the point of muddiness",
+      "next_experiment": "Reduce background saturation while preserving warm highlights on the character to create separation between cool environment and warm subject"
+    }
+  ]
+}
+```
+
+This is the stored frontier inspected from the same `work_states` table used by the
+production capture and semantic-recall endpoints. See the official
+[CockroachDB Cloud MCP documentation](https://www.cockroachlabs.com/docs/cockroachcloud/connect-to-the-cockroachdb-cloud-mcp-server)
+for supported clients, OAuth, and tool permissions.
+
 ## AWS Lambda preparation
 
 `Dockerfile.lambda` packages the same quantized MiniLM model into a Lambda container
@@ -141,7 +202,7 @@ docker build -f Dockerfile.lambda -t breadcrumb-recall-lambda .
 ```
 
 Create the Function URL with `NONE` auth only for the public hackathon demo, restrict
-CORS to the exact Vercel origin, and set a low Lambda reserved-concurrency value (for
+CORS to the exact Lovable origin, and set a low Lambda reserved-concurrency value (for
 example, 2) to limit accidental spend. Start with a 30-second timeout and 2048 MB of
 memory to leave room for MiniLM cold starts. The application also limits request size,
 only accepts the configured demo project, and caches dependency health for 60 seconds.
