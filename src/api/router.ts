@@ -12,17 +12,24 @@ const FORBIDDEN_RECALL_DETAILS = ["warm yellow", "deep blue", "muddy", "muted bl
 
 class InputError extends Error {}
 
-function allowedOrigin(): string {
-  return process.env.CORS_ORIGIN ?? "http://localhost:5173";
+function allowedOrigins(): string[] {
+  return (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 function allowedProjectIds(): Set<string> {
   return new Set((process.env.ALLOWED_PROJECT_IDS ?? "night-portrait").split(",").map((id) => id.trim()));
 }
 
-function responseHeaders(): Record<string, string> {
+function responseHeaders(requestOrigin?: string): Record<string, string> {
+  const origins = allowedOrigins();
+  const responseOrigin = requestOrigin && origins.includes(requestOrigin)
+    ? requestOrigin
+    : origins[0] ?? "http://localhost:5173";
   return {
-    "access-control-allow-origin": allowedOrigin(),
+    "access-control-allow-origin": responseOrigin,
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type",
     "content-type": "application/json; charset=utf-8",
@@ -55,8 +62,9 @@ export async function routeApi(
   body?: unknown,
   requestOrigin?: string
 ): Promise<ApiResult> {
-  const headers = responseHeaders();
-  if (requestOrigin && requestOrigin !== allowedOrigin()) {
+  const origins = allowedOrigins();
+  const headers = responseHeaders(requestOrigin);
+  if (requestOrigin && !origins.includes(requestOrigin)) {
     return { status: 403, headers, body: { error: "Origin not allowed." } };
   }
   if (method === "OPTIONS") return { status: 204, headers, body: null };
