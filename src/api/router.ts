@@ -8,7 +8,19 @@ export type ApiResult = {
 };
 
 const MAX_CONTEXT_LENGTH = 20_000;
-const FORBIDDEN_RECALL_DETAILS = ["warm yellow", "deep blue", "muddy", "muted blue-violet"];
+const FORBIDDEN_RECALL_DETAILS = [
+  "warm yellow",
+  "deep blue",
+  "muddy",
+  "muted blue-violet",
+  "circular step",
+  "text-only progress",
+  "thin progress bar",
+  "vertical space",
+  "visual weight",
+  "step 2 of 3",
+  "visual clutter"
+];
 
 class InputError extends Error {}
 
@@ -20,7 +32,11 @@ function allowedOrigins(): string[] {
 }
 
 function allowedProjectIds(): Set<string> {
-  return new Set((process.env.ALLOWED_PROJECT_IDS ?? "night-portrait").split(",").map((id) => id.trim()));
+  return new Set(
+    (process.env.ALLOWED_PROJECT_IDS ?? "night-portrait,mobile-checkout-redesign")
+      .split(",")
+      .map((id) => id.trim())
+  );
 }
 
 function responseHeaders(requestOrigin?: string): Record<string, string> {

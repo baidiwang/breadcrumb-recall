@@ -1,11 +1,23 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import type { AddressInfo } from "node:net";
-import { nightPortraitCaptureContext, partialRecallContext } from "../fixtures.js";
+import {
+  mobileCheckoutCaptureContext,
+  mobileCheckoutProjectId,
+  partialRecallContext
+} from "../fixtures.js";
+import {
+  assertMobileCheckoutRecall,
+  assertPartialContextIntegrity
+} from "../mobile-checkout-acceptance.js";
 import type { CaptureResponse, RecallResponse } from "../types.js";
 
 if (existsSync(".env.local")) loadEnvFile(".env.local");
 process.env.NODE_ENV = "test";
+process.env.ALLOWED_PROJECT_IDS = [
+  ...(process.env.ALLOWED_PROJECT_IDS ?? "night-portrait").split(","),
+  mobileCheckoutProjectId
+].join(",");
 
 const [{ createApiServer }, { closeApiDependencies }] = await Promise.all([
   import("../api/server.js"),
@@ -32,21 +44,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 try {
-  const forbiddenQueryDetails = ["warm yellow", "deep blue", "muddy", "muted blue-violet"];
-  if (forbiddenQueryDetails.some((detail) => partialRecallContext.toLowerCase().includes(detail))) {
-    throw new Error("Partial recall context contains a memory-only detail.");
-  }
+  assertPartialContextIntegrity(partialRecallContext);
 
   console.log("[1/3] Capturing Work State through POST /api/capture...");
   const capture = await post<CaptureResponse>("/api/capture", {
-    projectId: "night-portrait",
-    context: nightPortraitCaptureContext
+    projectId: mobileCheckoutProjectId,
+    context: mobileCheckoutCaptureContext
   });
   if (!capture.saved || !capture.memoryId) throw new Error("Capture response was invalid.");
 
   console.log("[2/3] Recalling from intentionally partial context through POST /api/recall...");
   const recall = await post<RecallResponse>("/api/recall", {
-    projectId: "night-portrait",
+    projectId: mobileCheckoutProjectId,
     context: partialRecallContext
   });
   const capturedMemory = recall.retrievedMemories.find(
@@ -54,25 +63,18 @@ try {
   );
   if (!capturedMemory) throw new Error("Recall did not retrieve the memory saved by capture.");
 
-  const memoryOnlyEvidence = [
-    "warm yellow",
-    "deep blue",
-    "muted blue-violet",
-    "muddy",
-    "saturation"
-  ];
-  const recallText = recall.recall.toLowerCase();
-  if (!memoryOnlyEvidence.some((detail) => recallText.includes(detail))) {
-    throw new Error("Recall text did not contain information available only in retrieved memory.");
-  }
+  assertMobileCheckoutRecall(recall);
 
-  console.log("[3/3] PASS: partial context retrieved the Night Portrait work frontier.");
+  console.log("[3/3] PASS: partial context retrieved the Mobile Checkout work frontier.");
   console.log(
     JSON.stringify(
       {
         saved: capture.saved,
         memoryId: capture.memoryId,
+        extractedWorkState: capture.workState,
+        retrievedMemoryCount: recall.retrievedMemories.length,
         retrievedMemoryIds: recall.retrievedMemories.map((memory) => memory.memoryId),
+        topRelevantMemory: recall.retrievedMemories[0],
         recall: recall.recall,
         reconstructedWorkState: recall.reconstructedWorkState
       },

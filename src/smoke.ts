@@ -1,72 +1,71 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
-import { createPool, applySchema, getDatabaseEvidence, searchMemories, upsertMemory } from "./db.js";
-import { createLocalEmbedder } from "./embedding.js";
-import { partialRecallContext, smokeMemories } from "./fixtures.js";
-import { workStateToEmbeddingText } from "./memory-text.js";
+import { captureMemory, closeApiDependencies, recallMemory } from "./api/service.js";
+import { createPool, getDatabaseEvidence } from "./db.js";
+import {
+  mobileCheckoutCaptureContext,
+  mobileCheckoutProjectId,
+  partialRecallContext
+} from "./fixtures.js";
+import {
+  assertMobileCheckoutRecall,
+  assertPartialContextIntegrity
+} from "./mobile-checkout-acceptance.js";
 
-if (existsSync(".env.local")) {
-  loadEnvFile(".env.local");
-}
+if (existsSync(".env.local")) loadEnvFile(".env.local");
+process.env.ALLOWED_PROJECT_IDS = [
+  ...(process.env.ALLOWED_PROJECT_IDS ?? "night-portrait").split(","),
+  mobileCheckoutProjectId
+].join(",");
 
 async function main(): Promise<void> {
-  const embedder = createLocalEmbedder();
-  const pool = createPool();
-
+  const evidencePool = createPool();
   try {
-    console.log("[1/5] Connected configuration loaded.");
-    await applySchema(pool);
-    console.log("[2/5] CockroachDB schema and distributed vector index are ready.");
+    assertPartialContextIntegrity(partialRecallContext);
+    console.log("[1/5] Extracting Mobile Checkout Work State with Claude...");
+    const capture = await captureMemory({
+      projectId: mobileCheckoutProjectId,
+      context: mobileCheckoutCaptureContext
+    });
+    console.log(`[2/5] Embedded and stored ${capture.memoryId} in CockroachDB.`);
 
-    for (const memory of smokeMemories) {
-      const embedding = await embedder.embed(workStateToEmbeddingText(memory.workState));
-      await upsertMemory(pool, memory, embedding);
-      console.log(`[3/5] Embedded and stored: ${memory.projectId} (${embedding.length} dimensions).`);
+    const recall = await recallMemory({
+      projectId: mobileCheckoutProjectId,
+      context: partialRecallContext
+    });
+    console.log("[3/5] Project-scoped semantic vector search completed.");
+
+    if (!recall.retrievedMemories.some((memory) => memory.memoryId === capture.memoryId)) {
+      throw new Error("Recall did not retrieve the Mobile Checkout memory saved by capture.");
     }
+    assertMobileCheckoutRecall(recall);
+    console.log("[4/5] Recall reconstruction recovered all required semantic facts.");
 
-    const queryEmbedding = await embedder.embed(partialRecallContext);
-    const retrievedMemories = await searchMemories(pool, queryEmbedding, smokeMemories.length);
-    console.log("[4/5] Semantic vector search completed.");
-
-    const evidence = await getDatabaseEvidence(pool);
-    const top = retrievedMemories[0];
-    if (top?.projectId !== "night-portrait") {
-      throw new Error(`Semantic retrieval assertion failed. Expected night-portrait, got ${top?.projectId}.`);
-    }
-
-    const forbiddenQueryDetails = ["warm yellow", "deep blue", "muddy", "muted blue-violet"];
-    if (forbiddenQueryDetails.some((detail) => partialRecallContext.toLowerCase().includes(detail))) {
-      throw new Error("Partial recall context accidentally contains details that must come from memory.");
-    }
-
-    console.log("[5/5] PASS: partial context retrieved the Night Portrait work frontier.");
+    const evidence = await getDatabaseEvidence(evidencePool);
+    console.log("[5/5] PASS: partial context retrieved the Mobile Checkout work frontier.");
     console.log(
       JSON.stringify(
         {
           passed: true,
+          extractedWorkState: capture.workState,
           embedding: {
             provider: "local ONNX via Transformers.js",
-            model: embedder.modelId,
-            dimensions: embedder.dimensions
+            model: "onnx-community/all-MiniLM-L6-v2-ONNX",
+            dimensions: 384
           },
           cockroachdb: evidence,
           currentContext: partialRecallContext,
-          retrievedMemories,
-          proof: {
-            recoveredOnlyFromMemory: {
-              rejectedDirections: top.rejectedDirections,
-              currentDirection: top.currentDirection,
-              unresolvedQuestion: top.unresolvedQuestion,
-              nextExperiment: top.nextExperiment
-            }
-          }
+          retrievedMemoryCount: recall.retrievedMemories.length,
+          topRelevantMemory: recall.retrievedMemories[0],
+          recall: recall.recall,
+          recoveredOnlyFromMemory: recall.reconstructedWorkState
         },
         null,
         2
       )
     );
   } finally {
-    await pool.end();
+    await Promise.all([evidencePool.end(), closeApiDependencies()]);
   }
 }
 

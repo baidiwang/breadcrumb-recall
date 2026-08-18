@@ -14,7 +14,7 @@ structured work state
 → semantic retrieval from intentionally incomplete context
 ```
 
-The fixture supplies the initial creative context. Embedding, persistence, indexing,
+The fixture supplies the initial product-design context. Extraction, embedding, persistence, indexing,
 and retrieval are real. The incomplete recall query omits the rejected directions,
 current direction, unresolved question, and next experiment.
 
@@ -29,7 +29,7 @@ npm run smoke
 Success requires the output to contain:
 
 ```text
-PASS: partial context retrieved the Night Portrait work frontier.
+PASS: partial context retrieved the Mobile Checkout work frontier.
 ```
 
 The final JSON includes the CockroachDB version, vector index name, stored vector
@@ -67,7 +67,7 @@ Capture the pre-seeded project context:
 ```bash
 curl -X POST http://localhost:8787/api/capture \
   -H 'content-type: application/json' \
-  -d '{"projectId":"night-portrait","context":"Project: Night Portrait. The artwork shows a warmly lit character against a cool nighttime environment. Warm yellow competed with the subject; deep blue made skin tones muddy. Muted blue-violet is the current direction. The unresolved question is how to keep the environment cool without muddy skin. Next, reduce background saturation while preserving warm highlights."}'
+  -d '{"projectId":"mobile-checkout-redesign","context":"Project: Mobile Checkout Redesign. Simplify the mobile checkout header while keeping users oriented. Circular step indicators consumed too much vertical space and added visual weight. Text-only progress was cleaner but made progress less immediately visible. The current direction is a thin progress bar with a compact step label. The unresolved question is how to preserve progress awareness without visual clutter. Next, remove the circular icons and test the compact progress treatment."}'
 ```
 
 Recall with intentionally incomplete context:
@@ -75,7 +75,7 @@ Recall with intentionally incomplete context:
 ```bash
 curl -X POST http://localhost:8787/api/recall \
   -H 'content-type: application/json' \
-  -d '{"projectId":"night-portrait","context":"Night portrait study. Keep the environment cool without losing warm skin tones."}'
+  -d '{"projectId":"mobile-checkout-redesign","context":"Continue simplifying the mobile checkout header while keeping progress clear."}'
 ```
 
 The recall request deliberately omits all prior explored and rejected directions. The
@@ -90,7 +90,7 @@ npm run api:smoke
 Success ends with:
 
 ```text
-PASS: partial context retrieved the Night Portrait work frontier.
+PASS: partial context retrieved the Mobile Checkout work frontier.
 ```
 
 ### Frontend integration
@@ -101,13 +101,13 @@ The existing Web Demo only needs to replace its mock calls:
 const capture = await fetch(`${API_URL}/api/capture`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ projectId: "night-portrait", context: preseededContext })
+  body: JSON.stringify({ projectId: "mobile-checkout-redesign", context: preseededContext })
 }).then((response) => response.json());
 
 const recall = await fetch(`${API_URL}/api/recall`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ projectId: "night-portrait", context: partialContext })
+  body: JSON.stringify({ projectId: "mobile-checkout-redesign", context: partialContext })
 }).then((response) => response.json());
 ```
 
@@ -192,7 +192,7 @@ DATABASE_URL
 ANTHROPIC_API_KEY
 ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 CORS_ORIGIN=https://your-approved-demo.example
-ALLOWED_PROJECT_IDS=night-portrait
+ALLOWED_PROJECT_IDS=night-portrait,mobile-checkout-redesign
 ```
 
 Build and test the image locally before publishing it to ECR:
